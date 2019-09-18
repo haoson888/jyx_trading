@@ -95,6 +95,7 @@ class BaseGateway(ABC):
         """
         self.on_event(EVENT_TICK, tick)
         self.on_event(EVENT_TICK + tick.vt_symbol, tick)
+        pass
 
     def on_trade(self, trade: TradeData):
         """
