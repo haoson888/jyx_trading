@@ -28,9 +28,11 @@ def init(driver: Driver, settings: dict):
         Driver.POSTGRESQL: init_postgresql,
     }
     assert driver in init_funcs
-
+    # 根据 数据库配置 产生 数据库对象
     db = init_funcs[driver](settings)
+    # 生成数据库表
     bar, tick = init_models(db, driver)
+    # 包数据库表 拿给数据库管理类管理
     return SqlManager(bar, tick)
 
 

@@ -29,9 +29,11 @@ class TickData(BaseData):
         * orderbook snapshot
         * intraday market statistics.
     """
-
+    # 交易对
     symbol: str
+    # 交易所
     exchange: Exchange
+    # 日期时间
     datetime: datetime
 
     name: str = ""
@@ -46,13 +48,13 @@ class TickData(BaseData):
     high_price: float = 0
     low_price: float = 0
     pre_close: float = 0
-
+    # 买
     bid_price_1: float = 0
     bid_price_2: float = 0
     bid_price_3: float = 0
     bid_price_4: float = 0
     bid_price_5: float = 0
-
+    # 卖
     ask_price_1: float = 0
     ask_price_2: float = 0
     ask_price_3: float = 0
@@ -73,6 +75,7 @@ class TickData(BaseData):
 
     def __post_init__(self):
         """"""
+        # 交易对+交易所
         self.vt_symbol = f"{self.symbol}.{self.exchange.value}"
 
 

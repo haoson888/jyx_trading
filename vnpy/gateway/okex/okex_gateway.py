@@ -9,6 +9,7 @@ import ccxt
 
 from vnpy.event import EventEngine
 from vnpy.trader.constant import Exchange
+from vnpy.trader.database import database_manager
 from vnpy.trader.gateway import BaseGateway
 from vnpy.trader.object import SubscribeRequest, OrderRequest, CancelRequest, HistoryRequest, TickData
 from copy import copy
@@ -39,6 +40,8 @@ class OkexfGateway(BaseGateway):
         """
         super().__init__(event_engine, "OKEX")
         self.gateway = None
+        # 数据库对象
+        self.database_manager = database_manager
 
         # 所有的交易对list
         self.symbols = []
@@ -69,53 +72,63 @@ class OkexfGateway(BaseGateway):
         """
         ticker = self.__fetch_ticker(req.symbol)
         depth = self.__fetch_depth(req.symbol)
-        self.on_ticker(ticker)
-        # self.on_depth(depth)
+        # 把ticker的信息填充到TickData数据结构里
+        tickdata_obj = self.on_ticker(ticker)
+        # 把行情深度的信息填充到TickData数据结构里
+        tickdata_obj = self.add_depth(depth, tickdata_obj)
 
-    def on_ticker(self, d):
+        # 把数据插入数据库
+        self.database_manager.save_tick_data([tickdata_obj])
+
+    def on_ticker(self, ticker):
         """
         处理tick数据
-        :param d: 
-        :return: 
+        :param ticker: 
+        :return: tick对象
         """
-        if not d:
+        if not ticker:
             return
-        symbol = d["symbol"]
-        dt = utc_to_local(d["datetime"])
+        symbol = ticker["symbol"]
+        dt = utc_to_local(ticker["datetime"])
         tick = TickData(symbol=symbol, exchange=Exchange.OKEX, datetime=dt, gateway_name="OKEX")
+        tick.name = symbol
 
-        tick.last_price = float(d["last"])
-        tick.high_price = float(d["high"])
-        tick.low_price = float(d["low"])
-        tick.volume = float(d["info"]["vol"])
+        tick.last_price = float(ticker["last"])
+        tick.high_price = float(ticker["high"])
+        tick.low_price = float(ticker["low"])
+        tick.volume = float(ticker["info"]["vol"])
 
-        self.on_tick(copy(tick))
+        return tick
 
-    def on_depth(self, d):
+    def add_depth(self, depth, tickdata: "TickData"):
         """
-        处理行情深度
-        :param d: 
-        :return: 
+        tickdata 对象里完善行情深度信息
+        :param depth: 行情深度信息
+        :return: 返回TickData数据结构
         """
-        symbol = d["instrument_id"]
-        tick = self.ticks.get(symbol, None)
-        if not tick:
+
+        if not depth:
             return
-
-        bids = d["bids"]
-        asks = d["asks"]
+        # 买
+        bids = depth["bids"]
+        # 卖
+        asks = depth["asks"]
+        # 买
         for n, buf in enumerate(bids):
-            price, volume, _, __ = buf
-            tick.__setattr__("bid_price_%s" % (n + 1), price)
-            tick.__setattr__("bid_volume_%s" % (n + 1), volume)
-
+            price, volume = buf
+            tickdata.__setattr__("bid_price_%s" % (n + 1), price)
+            tickdata.__setattr__("bid_volume_%s" % (n + 1), volume)
+            if n >= 4:
+                break
+        # 卖
         for n, buf in enumerate(asks):
-            price, volume, _, __ = buf
-            tick.__setattr__("ask_price_%s" % (n + 1), price)
-            tick.__setattr__("ask_volume_%s" % (n + 1), volume)
+            price, volume = buf
+            tickdata.__setattr__("ask_price_%s" % (n + 1), price)
+            tickdata.__setattr__("ask_volume_%s" % (n + 1), volume)
+            if n >= 4:
+                break
 
-        tick.datetime = utc_to_local(d["timestamp"])
-        self.on_tick(copy(tick))
+        return tickdata
 
     def send_order(self, req: OrderRequest) -> str:
         """
@@ -169,12 +182,12 @@ class OkexfGateway(BaseGateway):
         ret = self.gateway.fetch_ticker(symbol)
         return ret
 
-    def __fetch_depth(self, symbol):
+    def __fetch_depth(self, symbol, limit=5):
         """
         获取市场深度
         :return: 
         """
-        depth = self.gateway.fetch_order_book(symbol)
+        depth = self.gateway.fetch_order_book(symbol, limit)
         return depth
 
     def __fetch_bar(self, symbol, timeframe='1m'):

@@ -322,6 +322,7 @@ class LogEngine(BaseEngine):
 class OmsEngine(BaseEngine):
     """
     Provides order management system function for VN Trader.
+    订单管理引擎
     """
 
     def __init__(self, main_engine: MainEngine, event_engine: EventEngine):
